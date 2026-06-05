@@ -1,4 +1,13 @@
-# Home Credit Default Risk
+## Problem
+Home Credit serves unbanked customers who lack traditional 
+credit history. The goal is to predict loan default probability 
+to reduce financial risk while ensuring creditworthy applicants 
+aren't rejected.
+
+## Tech Stack
+Python | XGBoost | Optuna | Pandas | Scikit-learn | NumPy
+
+## Home Credit Default Risk
 
 Binary classification to predict loan default probability using the Home Credit Kaggle dataset.
 
