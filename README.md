@@ -17,7 +17,8 @@ Binary classification to predict loan default probability using the Home Credit 
 | ROC-AUC | 0.7795 |
 
 ## Feature Importance
-![Feature Importance](figure_1.png)
+
+![Feature Importance](Figure_1.png)
 
 ## Approach
 
