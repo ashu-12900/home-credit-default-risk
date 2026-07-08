@@ -2,9 +2,8 @@ import pandas as pd
 
 base_path = r"C:\Users\PC\OneDrive\Desktop\work\home-credit-default-risk"
 
-def load_and_merge():
-    # main table
-    df = pd.read_csv(f"{base_path}\\application_train.csv")
+def load_and_merge(main_file="application_train.csv"):
+    df = pd.read_csv(f"{base_path}\\{main_file}")
     print(f"Main table: {df.shape}")
 
     # bureau

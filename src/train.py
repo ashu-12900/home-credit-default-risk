@@ -4,6 +4,7 @@ from data_pre import clean_data, split_data, feature_selection, feature_engineer
 from sklearn.metrics import roc_auc_score
 import optuna
 import pickle
+from sklearn.model_selection import train_test_split 
 from merge import load_and_merge
 
 model_path    = r"C:\Users\PC\OneDrive\Desktop\work\home-credit-default-risk\model.pkl"
