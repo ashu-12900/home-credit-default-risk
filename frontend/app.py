@@ -2,12 +2,15 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import requests
+import os
+
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8000")
 
 st.set_page_config(page_title="Home Credit Risk Dashboard", page_icon="💳", layout="centered")
 
 @st.cache_data
 def get_data():
-    response = requests.get("https://home-credit-backend.onrender.com/applicants/")
+    response = requests.get(f"{BACKEND_URL}/applicants/")
     return response.json()
 
 applicant_ids = get_data()
@@ -20,7 +23,7 @@ st.caption("Select a sample applicant, then adjust their declarable details to s
 st.divider()
 
 sk_id = st.selectbox("Select Applicant ID", applicant_ids)
-response = requests.get(f"https://home-credit-backend.onrender.com/applicants/{sk_id}")
+response = requests.get(f"{BACKEND_URL}/applicants/{sk_id}")
 row = response.json()
 
 st.subheader("Application Details")
@@ -67,7 +70,7 @@ if st.button("Predict Risk", type="primary"):
             "Days_employed": days_employed
         }
         try:
-            response = requests.post("https://home-credit-backend.onrender.com/predict/", json=payload)
+            response = requests.post(f"{BACKEND_URL}/predict/", json=payload)
         except requests.exceptions.ConnectionError:
             st.error("Could not connect to the prediction server. Is it running?")
             st.stop()
