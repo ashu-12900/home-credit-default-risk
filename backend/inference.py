@@ -2,6 +2,7 @@ import pickle
 import pandas as pd
 
 import os
+import shap
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -41,10 +42,18 @@ def recompute(row):
     row["GOODS_CREDIT_RATIO"] = row["AMT_GOODS_PRICE"] / row["AMT_CREDIT"]
     row["EMPLOYED_YEARS"] = row["DAYS_EMPLOYED"].clip(upper=0) / -365
     return row
+
+
 def predict(model, row, selected_features):
     row = row.reindex(columns=selected_features)
     prob = model.predict_proba(row)[:, 1]
     return prob[0]
+
+def explain_prediction(model, row, selected_features):
+    row = row.reindex(columns=selected_features)
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(row)
+    return shap_values, explainer.expected_value
 if __name__=="__main__":
     model = load_model()
     selected_features = load_features()
@@ -53,3 +62,7 @@ if __name__=="__main__":
     row = recompute(row)
     prob = predict(model, row, selected_features)
     print("Default probability:", prob)
+    shap_values, base_value = explain_prediction(model, row, selected_features)
+    print("Base value:", base_value)
+    print("SHAP values shape:", shap_values.shape)
+    print("SHAP values:", shap_values)

@@ -1,19 +1,23 @@
+import os
 from xgboost import XGBClassifier
 import pandas as pd
 from data_pre import clean_data, split_data, feature_selection, feature_engineering
 from sklearn.metrics import roc_auc_score
 import optuna
 import pickle
-from sklearn.model_selection import train_test_split 
+from sklearn.model_selection import train_test_split
 from merge import load_and_merge
 
-model_path    = r"C:\Users\PC\OneDrive\Desktop\work\home-credit-default-risk\model.pkl"
-features_path = r"C:\Users\PC\OneDrive\Desktop\work\home-credit-default-risk\features.pkl"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+model_path    = os.path.join(BASE_DIR, "model.pkl")
+features_path = os.path.join(BASE_DIR, "features.pkl")
+impute_stats_path = os.path.join(BASE_DIR, "impute_stats.pkl")
 
 def train_model():
     df = load_and_merge()
     df = feature_engineering(df)
-    df = clean_data(df)
+    df,impute_stats = clean_data(df)
     X_train, X_test, y_train, y_test = split_data(df)
     X_train, X_test, selected_features = feature_selection(X_train, y_train, X_test)
 
@@ -72,6 +76,9 @@ def train_model():
     with open(features_path, "wb") as f:
         pickle.dump(selected_features, f)
     print("Model and features saved successfully")
+
+    with open(impute_stats_path, "wb") as f:
+        pickle.dump(impute_stats, f)
 
     return best_model
 

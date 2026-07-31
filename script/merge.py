@@ -1,6 +1,10 @@
+import os
 import pandas as pd
 
-base_path = r"C:\Users\PC\OneDrive\Desktop\work\home-credit-default-risk"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))   # .../src
+DATA_DIR = os.path.dirname(BASE_DIR)                     # repo root
+
+base_path = DATA_DIR
 
 def load_and_merge(main_file="application_train.csv"):
     df = pd.read_csv(f"{base_path}\\{main_file}")

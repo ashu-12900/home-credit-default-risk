@@ -1,11 +1,16 @@
+import os
 import pickle
 from merge import load_and_merge
-from data_pre import  clean_data, split_data,feature_engineering
+from data_pre import clean_data, split_data, feature_engineering
 from sklearn.metrics import roc_auc_score, classification_report, confusion_matrix
 
-data_path     = r"C:\Users\PC\OneDrive\Desktop\work\home-credit-default-risk\application_train.csv"
-model_path    = r"C:\Users\PC\OneDrive\Desktop\work\home-credit-default-risk\model.pkl"
-features_path = r"C:\Users\PC\OneDrive\Desktop\work\home-credit-default-risk\features.pkl"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.dirname(BASE_DIR)
+BACKEND_DIR = os.path.join(DATA_DIR, "backend")
+
+data_path     = os.path.join(DATA_DIR, "application_train.csv")
+model_path    = os.path.join(BACKEND_DIR, "model.pkl")
+features_path = os.path.join(BACKEND_DIR, "features.pkl")
 
 def evaluate_model():
     with open(model_path, "rb") as f:
@@ -15,7 +20,7 @@ def evaluate_model():
 
     df = load_and_merge()
     df=feature_engineering(df)
-    df = clean_data(df)
+    df,_= clean_data(df)
     X_train, X_test, y_train, y_test = split_data(df)
 
     # use saved features — no rerunning feature selection
