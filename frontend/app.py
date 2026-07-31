@@ -7,7 +7,7 @@ st.set_page_config(page_title="Home Credit Risk Dashboard", page_icon="💳", la
 
 @st.cache_data
 def get_data():
-    response = requests.get("http://backend:8000/applicants/")
+    response = requests.get("https://home-credit-backend.onrender.com/applicants/")
     return response.json()
 
 applicant_ids = get_data()
@@ -20,7 +20,7 @@ st.caption("Select a sample applicant, then adjust their declarable details to s
 st.divider()
 
 sk_id = st.selectbox("Select Applicant ID", applicant_ids)
-response = requests.get(f"http://backend:8000/applicants/{sk_id}")
+response = requests.get(f"https://home-credit-backend.onrender.com/applicants/{sk_id}")
 row = response.json()
 
 st.subheader("Application Details")
@@ -67,7 +67,7 @@ if st.button("Predict Risk", type="primary"):
             "Days_employed": days_employed
         }
         try:
-            response = requests.post("http://backend:8000/predict/", json=payload)
+            response = requests.post("https://home-credit-backend.onrender.com/predict/", json=payload)
         except requests.exceptions.ConnectionError:
             st.error("Could not connect to the prediction server. Is it running?")
             st.stop()
