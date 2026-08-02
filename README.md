@@ -1,34 +1,99 @@
 # Home Credit Default Risk Dashboard
 
-This project takes a trained XGBoost credit-risk model, built on the Home Credit Default Risk dataset, and wraps it in an interactive Streamlit dashboard. Rather than treating deployment as a simple "load model, call predict" exercise, the goal here was to build something that respects how the underlying model actually works: a real applicant's risk score depends heavily on aggregated behavioral and bureau history that no one can meaningfully type into a form, alongside a smaller set of fields an applicant genuinely could declare on a loan application. The dashboard is built around that distinction.
+An interactive risk-scoring dashboard for the Home Credit Default Risk dataset, built with a proper FastAPI backend and a Streamlit frontend as two separate services. The backend owns the trained model and all inference logic; the frontend is a pure UI layer that talks to it over HTTP.
 
-**Live app:** [home-credit-default-risk-g9ynp2thzey3gf7jrqtkmq.streamlit.app](https://home-credit-default-risk-g9ynp2thzey3gf7jrqtkmq.streamlit.app/)
+**Live app:** https://home-credit-default-risk-7fax.onrender.com
+**API docs:** https://home-credit-backend.onrender.com/docs
 
-## How it works
+## What it does
 
-The original model was trained on a merge of seven tables from the Home Credit dataset — the main application table plus bureau, previous applications, installment payments, credit card balances, and POS cash balances — aggregated up to one row per applicant and fed into an XGBoost classifier tuned with Optuna over 100 trials. That merge and training pipeline lives in `merge.py`, `data_pre.py`, and `train.py`, and only ever needs to run once, locally, to produce the saved `model.pkl` and `features.pkl`.
+Pick a real sampled applicant from the test set, then edit the fields a person could actually declare on a loan application: income, credit amount, annuity, goods price, family size, and days employed. Everything else the model uses — external bureau scores, prior loan history, payment behavior — stays fixed to that applicant's real data, because those are things a bureau reports, not things an applicant types in.
 
-For the dashboard, that same merge and feature-engineering pipeline runs once more, this time over the Kaggle test set, and the result is cached to `test_merged.parquet` via `prep_test.py`. This was a deliberate performance decision: running the full seven-table merge live inside the app would mean reading and grouping tens of millions of rows on every cold start, which is both slow and a real risk of exceeding the memory limits of a free-tier deployment. Precomputing it once means the deployed app loads a single small file and responds in seconds rather than minutes.
+I went with this split on purpose. An earlier version of the project let you edit every single feature, including the aggregated bureau fields, and it just felt dishonest — those numbers represent years of financial history sitting in a credit bureau's systems, not something you'd know off the top of your head. Letting someone drag a slider for it misrepresents how the model actually works.
 
-The dashboard itself lets a user pick a real sampled applicant from that test set, then edit a handful of fields that a real applicant could plausibly declare — income, credit amount, annuity, goods price, family size, and days employed. Everything else — external bureau scores, previous loan history, payment behavior, regional metadata — stays fixed to that applicant's real recorded values, since those aren't things a person could self-report. When the user edits an income or credit field, the six derived ratio features the model depends on (credit-to-income ratio, annuity-to-income ratio, and so on) are recalculated live before the prediction runs, so the "what-if" exploration actually reflects the edited values rather than stale ones. That recomputation logic lives in `inference.py`, alongside the functions that load the cached model and data and run the final prediction.
+## Architecture
 
-## Design decision worth naming
+```
+backend/     FastAPI service — model, feature list, inference and SHAP logic
+frontend/    Streamlit service — UI only, calls the backend over HTTP
+script/      Offline pipeline — merging, cleaning, training (run once, locally)
+```
 
-An earlier version of this dashboard considered a fully manual form, where a user would type in every single feature the model uses, including the aggregated bureau and behavioral fields. That approach was deliberately rejected: those fields represent months or years of financial history that live in a credit bureau's systems, not in an applicant's head, and building sliders for them would have been misleading about how the model actually makes decisions. The hybrid approach used here — real sampled data as the base, with only genuinely declarable fields exposed as editable — was chosen specifically to stay honest about that boundary while still giving the dashboard real interactivity.
+The frontend has no direct access to the model or any pickle file. Every prediction goes through the API. Locally the two run as separate Docker containers via docker-compose; in production they're two independent Render services, with the frontend pointed at the backend's URL through an environment variable.
 
-## Feature Importance
+## Backend
+
+- `inference.py` — loads the model, feature list, and cached applicant data; recomputes derived features; runs predictions and SHAP explanations
+- `model_store.py` — loads everything once at startup and keeps it in memory, so nothing gets re-read from disk per request
+- `schemas.py` — Pydantic models for request/response validation
+- `predict.py` — `/predict/` router: applicant ID + field overrides in, probability + risk band + top-10 SHAP values out
+- `application.py` — `/applicants/` router: lists valid applicant IDs, returns one applicant's declarable fields
+- `timer.py` — middleware that stamps every response with an `X-Response-Time` header
+- `main.py` — entrypoint, wires up startup, CORS, middleware, and both routers
+
+### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/applicants/` | List sampled applicant IDs |
+| GET | `/applicants/{sk_id}` | One applicant's declarable field values |
+| POST | `/predict/` | Predict for an applicant + overrides; returns probability, risk band, SHAP breakdown |
+
+Full docs live at `/docs` on the deployed backend.
+
+## The model
+
+Trained on a merge of seven tables from the Home Credit dataset — application, bureau, previous applications, installments, credit card balances, POS cash balances — aggregated to one row per applicant, fed into an XGBoost classifier tuned with Optuna over 100 trials. That whole pipeline lives in `script/` and only runs once, locally, to produce `model.pkl` and `features.pkl`.
+
+For serving, I ran the same merge once more over the Kaggle test set and cached the result to `test_merged.parquet`. Doing the full seven-table merge on every request would mean grouping tens of millions of rows live, which is slow and would probably blow through memory on a free-tier deploy. Precomputing it once means the backend just loads one small file at startup and responds fast.
+
+When you edit a field and hit predict, the backend recomputes the ratio features the model actually depends on — credit-to-income, annuity-to-income, employment years, that kind of thing — before running inference, so the prediction reflects what you actually typed in.
+
+## Risk sensitivity experiment
+
+I wanted to know which of the six editable fields actually move the prediction, so I ran a quick test on one sampled applicant. Baseline default probability: 28.44%.
+
+**Round 1:** set income to 300,000, credit to 250,000, annuity to 15,000, goods price to 240,000, family members to 1, days employed to -5,000 (about 13.7 years). This replaced an earlier set of values that didn't make much sense together (goods price way out of line with credit, annuity way out of line with both). Result: 24.85%. The SHAP chart showed annuity and employment years shift into favorable territory, while EXT_SOURCE_3 and POS_COUNT stayed locked and unfavorable, as expected since they're tied to the applicant's actual bureau history.
+
+**Round 2:** pushed annuity down to 8,000 and days employed to -8,000 (~22 years), left everything else alone since round 1 showed it wasn't doing much. Result: 18.89%.
+
+**Where I stopped:** by round 2, annuity's effect on the chart was visibly smaller than it had been in round 1 — diminishing returns. EXT_SOURCE_3 alone was carrying about as much weight as everything else in the chart combined, and it's not something the dashboard can touch. No point chasing the number further once the pattern's clear.
+
+Only two of the six editable fields actually mattered for this applicant. The other four barely moved anything once the first round confirmed that. I think that's a good sign, not a limitation — it means you can't just fudge your income on a form and talk the model down to near-zero risk. The prediction stays anchored to real financial history.
+
+## Feature importance
 ![Feature Importance](Figure_1.png)
-
 
 ## Known limitations
 
-A few things were identified during development and deliberately left as-is rather than fixed, since correcting them would require retraining the model and this project's scope was deployment, not further model iteration. Imputation statistics are recomputed per-dataset rather than reused from training, the dataset's well-known `DAYS_EMPLOYED` placeholder-value anomaly (365243) isn't explicitly handled, and `SK_ID_CURR` was inadvertently included as a real input feature during feature selection and is kept in the inference pipeline for train/inference consistency.
+- Hyperparameter tuning during training evaluates all Optuna trials against the same held-out test split used for final reporting, so the ~0.78 ROC-AUC is probably a bit optimistic. Cross-validation would fix this and is the next thing on my list.
+- The API can only score applicants that already exist in the sampled `test_merged.parquet` — there's no path for a brand-new applicant with no bureau history yet. That was a deliberate scope decision for this version, not an oversight.
 
+## Stack
 
-## Tech stack
-
-Python, pandas, XGBoost, scikit-learn, Optuna (training only), Streamlit, PyArrow (for parquet caching). The trained model and feature list are serialized with `pickle`.
+Backend: FastAPI, Pydantic, XGBoost, SHAP, scikit-learn, pandas, PyArrow
+Frontend: Streamlit, Requests, pandas, Matplotlib
+Training only: Optuna
+Infra: Docker, Docker Compose, Render
 
 ## Running locally
 
-Install dependencies with `pip install -r requirements.txt`, then run `streamlit run src/app.py` from the project root. The app reads `model.pkl`, `features.pkl`, and `test_merged.parquet` from the `src/` directory using paths relative to the script location, so it runs the same way locally as it does when deployed.
+With Docker Compose (recommended):
+```
+docker-compose up --build
+```
+Backend at localhost:8000 (docs at /docs), frontend at localhost:8501.
+
+Without Docker:
+```
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+```
+cd frontend
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+If you're running the frontend outside Docker Compose, set the `BACKEND_URL` environment variable to wherever the backend actually is — it defaults to `http://backend:8000`, which only resolves inside Docker Compose's own network.
