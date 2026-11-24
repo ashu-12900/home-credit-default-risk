@@ -10,10 +10,15 @@ st.set_page_config(page_title="Home Credit Risk Dashboard", page_icon="💳", la
 
 @st.cache_data
 def get_data():
-    response = requests.get(f"{BACKEND_URL}/applicants/")
+    response = requests.get(f"{BACKEND_URL}/applicants/", timeout=90)
+    response.raise_for_status()
     return response.json()
 
-applicant_ids = get_data()
+try:
+    applicant_ids = get_data()
+except requests.exceptions.RequestException:
+    st.error("The backend is waking up (free hosting). Wait about a minute, then refresh the page.")
+    st.stop()
 
 
 st.title("Home Credit Default Risk Dashboard")
