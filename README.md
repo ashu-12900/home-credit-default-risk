@@ -51,7 +51,7 @@ When you edit a field and hit predict, the backend recomputes the ratio features
 
 ## Risk sensitivity experiment
 
-I wanted to know which of the six editable fields actually move the prediction, so I ran a quick test on one sampled applicant. Baseline default probability: 28.44%.
+I wanted to know which of the six editable fields actually move the prediction, so I ran a quick test on one sampled applicant. Baseline default probability: 38.77%.
 
 **Round 1:** set income to 300,000, credit to 250,000, annuity to 15,000, goods price to 240,000, family members to 1, days employed to -5,000 (about 13.7 years). This replaced an earlier set of values that didn't make much sense together (goods price way out of line with credit, annuity way out of line with both). Result: 24.85%. The SHAP chart showed annuity and employment years shift into favorable territory, while EXT_SOURCE_3 and POS_COUNT stayed locked and unfavorable, as expected since they're tied to the applicant's actual bureau history.
 
